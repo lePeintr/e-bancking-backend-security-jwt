@@ -4,28 +4,22 @@ import org.ebanking.ebanking_backend.dtos.BankAccountDTO;
 import org.ebanking.ebanking_backend.dtos.CurrentBankAccountDTO;
 import org.ebanking.ebanking_backend.dtos.CustomerDTO;
 import org.ebanking.ebanking_backend.dtos.SavingBankAccountDTO;
-import org.ebanking.ebanking_backend.entities.*;
-import org.ebanking.ebanking_backend.enums.AccountStatus;
-import org.ebanking.ebanking_backend.enums.OperationType;
-import org.ebanking.ebanking_backend.exceptions.BalanceNotSufficientException;
-import org.ebanking.ebanking_backend.exceptions.BankAccountNotFoundException;
 import org.ebanking.ebanking_backend.exceptions.CustomerNotFoundException;
-import org.ebanking.ebanking_backend.repositories.AccountOperationRepository;
-import org.ebanking.ebanking_backend.repositories.BankAccountRepository;
-import org.ebanking.ebanking_backend.repositories.CustomerRepository;
+import org.ebanking.ebanking_backend.security.services.IAppUserService;
 import org.ebanking.ebanking_backend.services.BankAccountService;
-import org.ebanking.ebanking_backend.services.BankService;
-import org.hibernate.sql.ast.SqlTreeCreationException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.core.userdetails.User;
 
-import java.sql.Date;
-import java.util.ArrayList;
+
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.JdbcUserDetailsManager;
+
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Stream;
 
 @SpringBootApplication
@@ -95,4 +89,49 @@ public class EbankingBackendApplication {
 
 
 	}
+
+	//@Bean
+	CommandLineRunner start(JdbcUserDetailsManager jdbcUserDetailsManager){
+		PasswordEncoder passwordEncoder = encoder();
+		return args -> {
+			//La condition marche uniquement si j'uutilise une vrai base de donnéé
+			//UserDetails u1 = jdbcUserDetailsManager.loadUserByUsername("user21");
+			//if(u1==null)
+				jdbcUserDetailsManager.createUser(
+					User.withUsername("user21").password(passwordEncoder.encode("1234"))
+							.roles("USER").build());
+			//UserDetails u2 = jdbcUserDetailsManager.loadUserByUsername("user22");
+			//if(u2==null)
+				jdbcUserDetailsManager.createUser(
+					User.withUsername("user22").password(passwordEncoder.encode("1234"))
+							.roles("USER").build());
+			//UserDetails u3 = jdbcUserDetailsManager.loadUserByUsername("user23");
+			//if(u3==null)
+			jdbcUserDetailsManager.createUser(
+					User.withUsername("user23").password(passwordEncoder.encode("1234"))
+							.roles("USER","ADMIN").build());
+
+		};
+	}
+
+	@Bean
+	CommandLineRunner commandLineRunnerUserDetails(IAppUserService appUserService){
+		return args->{
+			appUserService.addNewRole("USER");
+			appUserService.addNewRole("ADMIN");
+			appUserService.addNewUser("test1","1234","test1@gmail.com","1234");
+			appUserService.addNewUser("test2","1234","test2@gmail.com","1234");
+			appUserService.addNewUser("admin2","1234","admin2@gmail.com","1234");
+
+			appUserService.addRoleToUser("test1","USER");
+			appUserService.addRoleToUser("test2","USER");
+			appUserService.addRoleToUser("admin2","USER");
+			appUserService.addRoleToUser("admin2","ADMIN");
+		};
+	}
+	@Bean
+	public PasswordEncoder encoder(){
+		return new BCryptPasswordEncoder();
+	}
+
 }

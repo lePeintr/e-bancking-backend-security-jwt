@@ -1,11 +1,11 @@
 package org.ebanking.ebanking_backend.security;
 
-import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import org.ebanking.ebanking_backend.security.services.UserDetailsServiceImpl;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -13,7 +13,6 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -24,15 +23,18 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.provisioning.JdbcUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import javax.crypto.spec.SecretKeySpec;
+import javax.sql.DataSource;
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * SecurityConfig.java
@@ -45,7 +47,13 @@ import java.util.List;
 public class SecurityConfig {
     @Value("${jwt.secret}")
     private String secretKey;
-    @Bean
+
+    public SecurityConfig(@Lazy UserDetailsServiceImpl userDetailsServiceImpl) {
+        this.userDetailsServiceImpl = userDetailsServiceImpl;
+    }
+
+    private UserDetailsServiceImpl userDetailsServiceImpl;
+    //@Bean
     public InMemoryUserDetailsManager inMemoryUserDetailsManager(){
         PasswordEncoder passwordEncoder=passwordEncoder();
         return new InMemoryUserDetailsManager(
@@ -55,6 +63,10 @@ public class SecurityConfig {
         );
     }
 
+  //  @Bean
+    JdbcUserDetailsManager jdbcUserDetailsManager(DataSource dataSource){
+        return new JdbcUserDetailsManager(dataSource);
+    }
     @Bean
     public PasswordEncoder passwordEncoder(){
         return new BCryptPasswordEncoder();
@@ -66,10 +78,14 @@ public class SecurityConfig {
                 .sessionManagement(sm->sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf->csrf.disable())
                 .cors(Customizer.withDefaults())
-                .authorizeHttpRequests(ar->ar.requestMatchers("/auth/login/**").permitAll())
+                .headers(h->h.frameOptions(fo->fo.disable()))
+                .authorizeHttpRequests(ar->ar.requestMatchers("/auth/login/**","/h2-console/**").permitAll())
                 .authorizeHttpRequests(ar->ar.anyRequest().authenticated())
                 //.httpBasic(Customizer.withDefaults())//type d'authentification on va utiliser par exemple avec un formulaire c'est formLogin
-                .oauth2ResourceServer(oa->oa.jwt(Customizer.withDefaults()))
+                //.oauth2ResourceServer(oa->oa.jwt(Customizer.withDefaults()))
+                .oauth2ResourceServer(oa->oa.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))//config pur utiliser UserDertailsService
+                .userDetailsService(userDetailsServiceImpl)//Je dis a SpringSecurity que
+                //une fois un utilisateur saisi son username et mo de passe tu fais appelle à cette implementation
                 .build();
     }
 
@@ -105,4 +121,16 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);//j'applique cette configuration pour n'importe quel requette/paths
         return source;
     }
+
+    @Bean
+    JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+        grantedAuthoritiesConverter.setAuthoritiesClaimName("scope");
+
+        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        return jwtAuthenticationConverter;
+    }
+
 }
